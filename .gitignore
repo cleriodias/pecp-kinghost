@@ -58,6 +58,7 @@ deploy.zip
 !/storage/app/.gitignore
 /storage/certs/
 /storage/framework/cache/data/*
+/storage/framework/sessions/*
 /storage/framework/views/*.php
 /storage/app/private/
 /storage/app/public/
