@@ -21,6 +21,7 @@ yarn-error.log
 /.idea
 /.vscode
 /.zed
+/.vite/
 
 # Local deploy/runtime copies
 /build/
