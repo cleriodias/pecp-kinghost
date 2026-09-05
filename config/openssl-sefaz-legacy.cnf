@@ -1,0 +1,11 @@
+openssl_conf = openssl_init
+
+[openssl_init]
+ssl_conf = ssl_secao
+
+[ssl_secao]
+system_default = ssl_default_secao
+
+[ssl_default_secao]
+Options = UnsafeLegacyServerConnect,UnsafeLegacyRenegotiation
+CipherString = DEFAULT@SECLEVEL=0
