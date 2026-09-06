@@ -2,6 +2,11 @@ name: Deploy KingHost
 
 on:
   workflow_dispatch:
+    inputs:
+      build_dir:
+        description: 'Diretorio FTP que recebera o conteudo de public/build'
+        required: true
+        default: '.'
 
 concurrency:
   group: kinghost-production
@@ -22,9 +27,9 @@ jobs:
           KINGHOST_FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           KINGHOST_FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
           KINGHOST_FTP_SERVER_DIR: ${{ secrets.KINGHOST_FTP_SERVER_DIR }}
-          KINGHOST_FTP_BUILD_DIR: ${{ secrets.KINGHOST_FTP_BUILD_DIR }}
           KINGHOST_FTP_PORT: ${{ secrets.KINGHOST_FTP_PORT }}
           KINGHOST_FTP_TIMEOUT: ${{ secrets.KINGHOST_FTP_TIMEOUT }}
+          WORKFLOW_BUILD_DIR: ${{ github.event.inputs.build_dir }}
         run: |
           missing=0
           for secret_name in KINGHOST_FTP_SERVER KINGHOST_FTP_USERNAME KINGHOST_FTP_PASSWORD KINGHOST_FTP_SERVER_DIR; do
@@ -37,7 +42,7 @@ jobs:
           port="${KINGHOST_FTP_PORT:-21}"
           timeout="${KINGHOST_FTP_TIMEOUT:-300000}"
           server_dir="${KINGHOST_FTP_SERVER_DIR:-./}"
-          build_dir="${KINGHOST_FTP_BUILD_DIR:-.}"
+          build_dir="${WORKFLOW_BUILD_DIR:-.}"
 
           if [ "$server_dir" = "~" ] || [ "$server_dir" = "~/" ] || [ "$server_dir" = "www" ] || [ "$server_dir" = "www/" ] || [[ "$server_dir" == /home/* ]]; then
             server_dir="./"
@@ -83,6 +88,7 @@ jobs:
           KINGHOST_FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
           KINGHOST_FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           KINGHOST_FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+          KINGHOST_FTP_BUILD_DIR: ${{ github.event.inputs.build_dir }}
         run: |
           python3 <<'PY'
           import ftplib
@@ -155,7 +161,7 @@ jobs:
                   except ftplib.error_perm as error:
                       raise RuntimeError(
                           "The FTP user cannot write to the assets directory. "
-                          "Point KINGHOST_FTP_BUILD_DIR to the existing writable build directory "
+                          "Run the workflow again with build_dir set to an existing writable build directory "
                           "or adjust FTP permissions in KingHost."
                       ) from error
 
