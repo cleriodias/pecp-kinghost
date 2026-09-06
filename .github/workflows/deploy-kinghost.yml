@@ -27,12 +27,11 @@ jobs:
           KINGHOST_FTP_SECURITY: ${{ secrets.KINGHOST_FTP_SECURITY }}
           KINGHOST_FTP_TIMEOUT: ${{ secrets.KINGHOST_FTP_TIMEOUT }}
           KINGHOST_PUBLIC_SERVER_DIR: ${{ secrets.KINGHOST_PUBLIC_SERVER_DIR }}
-          KINGHOST_UPLOAD_APP: ${{ secrets.KINGHOST_UPLOAD_APP }}
           KINGHOST_UPLOAD_VENDOR: ${{ secrets.KINGHOST_UPLOAD_VENDOR }}
           KINGHOST_LARAVEL_ENV: ${{ secrets.KINGHOST_LARAVEL_ENV }}
         run: |
           missing=0
-          for secret_name in KINGHOST_FTP_SERVER KINGHOST_FTP_USERNAME KINGHOST_FTP_PASSWORD; do
+          for secret_name in KINGHOST_FTP_SERVER KINGHOST_FTP_USERNAME KINGHOST_FTP_PASSWORD KINGHOST_FTP_SERVER_DIR; do
             if [ -z "${!secret_name}" ]; then
               echo "::error::GitHub Actions secret ${secret_name} is required for KingHost deploy."
               missing=1
@@ -49,7 +48,6 @@ jobs:
             echo "::warning::KINGHOST_PUBLIC_SERVER_DIR=www/ publishes under /www on pecp.kinghost.net. Using ./ as the active HTTP root."
             public_dir="./"
           fi
-          upload_app="${KINGHOST_UPLOAD_APP:-false}"
           upload_vendor="${KINGHOST_UPLOAD_VENDOR:-false}"
 
           case "$protocol" in
@@ -80,7 +78,6 @@ jobs:
           echo "KINGHOST_DEPLOY_TIMEOUT=$timeout" >> "$GITHUB_ENV"
           echo "KINGHOST_FTP_SERVER_DIR=$server_dir" >> "$GITHUB_ENV"
           echo "KINGHOST_PUBLIC_SERVER_DIR=$public_dir" >> "$GITHUB_ENV"
-          echo "KINGHOST_UPLOAD_APP=$upload_app" >> "$GITHUB_ENV"
           echo "KINGHOST_UPLOAD_VENDOR=$upload_vendor" >> "$GITHUB_ENV"
 
           if [ -n "$KINGHOST_LARAVEL_ENV" ]; then
@@ -92,7 +89,6 @@ jobs:
           echo "KingHost deploy connection: protocol=$protocol port=$port timeout=${timeout}ms"
           echo "KingHost app directory: $server_dir"
           echo "KingHost public directory: $public_dir"
-          echo "KingHost upload app: $upload_app"
           echo "KingHost upload vendor: $upload_vendor"
           echo "KingHost upload Laravel env: $([ -n "$KINGHOST_LARAVEL_ENV" ] && echo true || echo false)"
           exit "$missing"
