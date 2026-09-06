@@ -149,6 +149,16 @@ jobs:
                       ensure_dir(ftp, remote_root)
                   print(f"Uploading {local_root} to {remote_root}")
 
+                  try:
+                      ensure_dir(ftp, "assets")
+                      ftp.cwd("..")
+                  except ftplib.error_perm as error:
+                      raise RuntimeError(
+                          "The FTP user cannot write to the assets directory. "
+                          "Point KINGHOST_FTP_BUILD_DIR to the existing writable build directory "
+                          "or adjust FTP permissions in KingHost."
+                      ) from error
+
                   for file_path in sorted(local_root.rglob("*")):
                       if not file_path.is_file():
                           continue
