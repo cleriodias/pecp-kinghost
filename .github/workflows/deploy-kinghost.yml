@@ -51,6 +51,7 @@ jobs:
           FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+          FTP_BASE_DIR: ${{ secrets.KINGHOST_FTP_BASE_DIR || '/home/pecp' }}
         run: |
           set -euo pipefail
 
@@ -63,16 +64,14 @@ jobs:
           set ftp:ssl-allow false
           EOF
 
-          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" "ftp://$FTP_SERVER:21" <<'EOF'
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" "ftp://$FTP_SERVER:21" <<EOF
           source /tmp/lftp-settings
+          cd "$FTP_BASE_DIR"
 
-          mkdir -p build
           mirror --reverse --verbose --parallel=2 public/build/ build/
 
-          mkdir -p public/build
           mirror --reverse --verbose --parallel=2 public/build/ public/build/
 
-          mkdir -p www/build
           mirror --reverse --verbose --parallel=2 public/build/ www/build/
 
           bye
