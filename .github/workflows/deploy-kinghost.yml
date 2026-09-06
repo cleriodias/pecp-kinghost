@@ -51,7 +51,6 @@ jobs:
           FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
-          FTP_BASE_DIR: ${{ secrets.KINGHOST_FTP_BASE_DIR || '.' }}
         run: |
           set -euo pipefail
 
@@ -67,7 +66,6 @@ jobs:
           lftp -u "$FTP_USERNAME,$FTP_PASSWORD" "ftp://$FTP_SERVER:21" <<EOF
           source /tmp/lftp-settings
           lcd public/build
-          cd "$FTP_BASE_DIR"
 
           cd build
           mirror --reverse --verbose --parallel=2 ./ ./
