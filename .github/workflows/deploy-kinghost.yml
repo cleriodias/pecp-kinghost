@@ -27,6 +27,7 @@ jobs:
           KINGHOST_FTP_SECURITY: ${{ secrets.KINGHOST_FTP_SECURITY }}
           KINGHOST_FTP_TIMEOUT: ${{ secrets.KINGHOST_FTP_TIMEOUT }}
           KINGHOST_PUBLIC_SERVER_DIR: ${{ secrets.KINGHOST_PUBLIC_SERVER_DIR }}
+          KINGHOST_UPLOAD_APP: ${{ secrets.KINGHOST_UPLOAD_APP }}
           KINGHOST_UPLOAD_VENDOR: ${{ secrets.KINGHOST_UPLOAD_VENDOR }}
           KINGHOST_LARAVEL_ENV: ${{ secrets.KINGHOST_LARAVEL_ENV }}
         run: |
@@ -48,6 +49,7 @@ jobs:
             echo "::warning::KINGHOST_PUBLIC_SERVER_DIR=www/ publishes under /www on pecp.kinghost.net. Using ./ as the active HTTP root."
             public_dir="./"
           fi
+          upload_app="${KINGHOST_UPLOAD_APP:-false}"
           upload_vendor="${KINGHOST_UPLOAD_VENDOR:-false}"
 
           case "$protocol" in
@@ -78,6 +80,7 @@ jobs:
           echo "KINGHOST_DEPLOY_TIMEOUT=$timeout" >> "$GITHUB_ENV"
           echo "KINGHOST_FTP_SERVER_DIR=$server_dir" >> "$GITHUB_ENV"
           echo "KINGHOST_PUBLIC_SERVER_DIR=$public_dir" >> "$GITHUB_ENV"
+          echo "KINGHOST_UPLOAD_APP=$upload_app" >> "$GITHUB_ENV"
           echo "KINGHOST_UPLOAD_VENDOR=$upload_vendor" >> "$GITHUB_ENV"
 
           if [ -n "$KINGHOST_LARAVEL_ENV" ]; then
@@ -89,6 +92,7 @@ jobs:
           echo "KingHost deploy connection: protocol=$protocol port=$port timeout=${timeout}ms"
           echo "KingHost app directory: $server_dir"
           echo "KingHost public directory: $public_dir"
+          echo "KingHost upload app: $upload_app"
           echo "KingHost upload vendor: $upload_vendor"
           echo "KingHost upload Laravel env: $([ -n "$KINGHOST_LARAVEL_ENV" ] && echo true || echo false)"
           exit "$missing"
@@ -239,8 +243,8 @@ jobs:
 
           cat > /tmp/lftp-settings <<EOF
           set cmd:fail-exit true
-          set net:timeout 30
-          set net:max-retries 3
+          set net:timeout 60
+          set net:max-retries 5
           set xfer:timeout ${timeout}
           set net:reconnect-interval-base 5
           set ftp:passive-mode true
@@ -263,12 +267,16 @@ jobs:
           echo "Deploying to KingHost with ${protocol} on port ${port}."
           echo "Deploying Laravel app to ${server_dir}; public files to ${public_dir}."
           echo "Public upload source: ${public_source}."
+          echo "App upload enabled: ${KINGHOST_UPLOAD_APP}."
           echo "Vendor upload enabled: ${KINGHOST_UPLOAD_VENDOR}."
           echo "Laravel env upload enabled: ${KINGHOST_UPLOAD_ENV}."
 
+          if [ "${KINGHOST_UPLOAD_APP}" = "true" ]; then
+            echo "Deploying Laravel app files to KingHost app root: ${server_dir}"
+
           lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
           source /tmp/lftp-settings
-          mirror --reverse --verbose --parallel=2 \
+          mirror --reverse --verbose --parallel=1 \
             --exclude-glob ".git*" \
             --exclude-glob "node_modules/**" \
             --exclude-glob "tests/**" \
@@ -286,8 +294,11 @@ jobs:
           cat "$server_dir/public/deploy-info.json"
           bye
           EOF
+          else
+            echo "Skipping Laravel app upload. Set KINGHOST_UPLOAD_APP=true to upload app files."
+          fi
 
-          if [ "${KINGHOST_UPLOAD_ENV}" = "true" ]; then
+          if [ "${KINGHOST_UPLOAD_ENV}" = "true" ] && [ "${KINGHOST_UPLOAD_APP}" = "true" ]; then
             echo "Uploading production .env to Laravel app root."
             lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
           source /tmp/lftp-settings
@@ -301,7 +312,7 @@ jobs:
 
           lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
           source /tmp/lftp-settings
-          mirror --reverse --verbose --parallel=2 \
+          mirror --reverse --verbose --parallel=1 \
             --exclude-glob ".env" \
             --exclude-glob ".env.*" \
             "$public_source" "$public_dir"
