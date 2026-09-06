@@ -238,6 +238,7 @@ jobs:
           fi
 
           cat > /tmp/lftp-settings <<EOF
+          set cmd:fail-exit true
           set net:timeout 30
           set net:max-retries 3
           set xfer:timeout ${timeout}
@@ -277,33 +278,9 @@ jobs:
             --exclude-glob "tmp/**" \
             --exclude-glob ".env" \
             --exclude-glob ".env.*" \
-            --exclude-glob "storage/app/**" \
-            --exclude-glob "storage/framework/cache/data/**" \
-            --exclude-glob "storage/framework/sessions/**" \
-            --exclude-glob "storage/framework/views/**" \
-            --exclude-glob "storage/logs/**" \
+            --exclude-glob "storage/**" \
+            --exclude-glob "bootstrap/cache/**" \
             ./ "$server_dir"
-
-          echo "Ensuring Laravel runtime directories exist on KingHost:"
-          mkdir -p "$server_dir/storage/app"
-          mkdir -p "$server_dir/storage/app/private"
-          mkdir -p "$server_dir/storage/framework/cache/data"
-          mkdir -p "$server_dir/storage/framework/sessions"
-          mkdir -p "$server_dir/storage/framework/views"
-          mkdir -p "$server_dir/storage/logs"
-          mkdir -p "$server_dir/endpoints/uploads"
-          mkdir -p "$server_dir/bootstrap/cache"
-          chmod 775 "$server_dir/storage"
-          chmod 775 "$server_dir/storage/app"
-          chmod 775 "$server_dir/storage/app/private"
-          chmod 775 "$server_dir/storage/framework"
-          chmod 775 "$server_dir/storage/framework/cache"
-          chmod 775 "$server_dir/storage/framework/cache/data"
-          chmod 775 "$server_dir/storage/framework/sessions"
-          chmod 775 "$server_dir/storage/framework/views"
-          chmod 775 "$server_dir/storage/logs"
-          chmod 775 "$server_dir/endpoints/uploads"
-          chmod 775 "$server_dir/bootstrap/cache"
 
           echo "Remote deploy marker:"
           cat "$server_dir/public/deploy-info.json"
@@ -315,7 +292,6 @@ jobs:
             lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
           source /tmp/lftp-settings
           put .env -o "$server_dir/.env"
-          chmod 600 "$server_dir/.env"
           cls -l "$server_dir/.env"
           bye
           EOF
@@ -329,9 +305,6 @@ jobs:
             --exclude-glob ".env" \
             --exclude-glob ".env.*" \
             "$public_source" "$public_dir"
-          chmod 755 "$public_dir"
-          chmod 644 "$public_dir/index.php"
-          chmod 644 "$public_dir/.htaccess"
           cls -la "$public_dir"
           echo "Remote public deploy marker:"
           cat "$public_dir/deploy-info.json"
