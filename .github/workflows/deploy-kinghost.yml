@@ -70,6 +70,7 @@ jobs:
                 --retry 5 \
                 --retry-delay 2 \
                 --retry-all-errors \
+                --ftp-method nocwd \
                 --ftp-create-dirs \
                 --user "$FTP_USERNAME:$FTP_PASSWORD" \
                 -T "$file" \
