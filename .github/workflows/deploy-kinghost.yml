@@ -235,6 +235,7 @@ jobs:
         run: |
           protocol="${KINGHOST_DEPLOY_PROTOCOL}"
           port="${KINGHOST_DEPLOY_PORT}"
+          timeout="${KINGHOST_DEPLOY_TIMEOUT:-120000}"
           server_dir="${KINGHOST_FTP_SERVER_DIR}"
           public_dir="${KINGHOST_PUBLIC_SERVER_DIR:-./}"
           if [ "$server_dir" = "~" ] || [ "$server_dir" = "~/" ] || [ -z "$server_dir" ]; then
@@ -257,6 +258,7 @@ jobs:
           set cmd:fail-exit true
           set net:timeout 30
           set net:max-retries 3
+          set xfer:timeout ${timeout}
           set net:reconnect-interval-base 5
           set ftp:passive-mode true
           set ssl:verify-certificate ${verify_certificate}
@@ -268,10 +270,6 @@ jobs:
           echo "Uploading fiscal CA bundle:"
           put storage/app/private/fiscal-ca-bundle.pem -o "$server_dir/storage/app/private/fiscal-ca-bundle.pem"
           put cacert.pem -o "$server_dir/cacert.pem"
-          chmod 644 "$server_dir/storage/app/private/fiscal-ca-bundle.pem"
-          chmod 644 "$server_dir/cacert.pem"
-          cls -l "$server_dir/storage/app/private/fiscal-ca-bundle.pem"
-          cls -l "$server_dir/cacert.pem"
           EOF
           fi
 
