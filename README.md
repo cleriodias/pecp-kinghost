@@ -243,12 +243,30 @@ FILESYSTEM_DISK=local
 APP_STORAGE=/home/paoecafe83/storage
 ```
 
-### Publicacao
+### Publicacao pelo GitHub Actions
 
-- O deploy principal acontece pelo workflow `.github/workflows/deploy.yml`.
-- O pipeline faz build do PHP e do front-end, gera os assets e envia o conteudo para a KingHost por FTP.
-- Como a KingHost trabalha com a pasta `www/`, o upload deve ser publicado nela para que o dominio encontre o `index.php` do projeto.
-- Configure no GitHub Actions o segredo `KINGHOST_FTP_PASSWORD` com a senha do FTP.
+- O deploy principal acontece pelo workflow `.github/workflows/deploy-kinghost.yml`.
+- O workflow e acionado manualmente pelo `workflow_dispatch` em GitHub Actions.
+- O pipeline instala dependencias PHP sem pacotes de desenvolvimento, gera os assets Vite e envia os arquivos para a KingHost por FTP usando `lftp`, no mesmo modelo do projeto `pec-rodrigo-kinghost`.
+- O workflow nao roda migrations nem altera o banco de dados.
+- O workflow nao envia `.env`, credenciais, `node_modules`, testes, `.git` ou arquivos privados de `storage`.
+
+### Secrets necessarios no GitHub Actions
+
+- `KINGHOST_FTP_SERVER`
+- `KINGHOST_FTP_USERNAME`
+- `KINGHOST_FTP_PASSWORD`
+
+### Secrets opcionais
+
+- `KINGHOST_FTP_SERVER_DIR`: padrao `./`, raiz inicial do FTP.
+- `KINGHOST_PUBLIC_SERVER_DIR`: padrao `./`, raiz publica ativa deste host.
+- `KINGHOST_UPLOAD_VENDOR`: padrao `false`; use `true` somente para restaurar/enviar `vendor` quando a KingHost nao tiver dependencias instaladas.
+- `KINGHOST_LARAVEL_ENV`: conteudo completo do `.env` de producao, somente se quiser que o Actions substitua o `.env` remoto.
+- `KINGHOST_FTP_PROTOCOL`: padrao `ftp`; valores aceitos: `ftp`, `ftps`, `ftps-legacy`, `sftp`.
+- `KINGHOST_FTP_PORT`: padrao `21`.
+- `KINGHOST_FTP_SECURITY`: padrao `strict`; pode ser `loose` se o certificado FTPS da hospedagem nao validar no runner.
+- `KINGHOST_FTP_TIMEOUT`: padrao `120000`, tempo limite de transferencia em milissegundos.
 
 ### Passos iniciais no servidor
 

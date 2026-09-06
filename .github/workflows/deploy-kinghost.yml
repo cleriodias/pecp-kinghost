@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Build and deploy frontend assets
+    name: Build and deploy to KingHost
     runs-on: ubuntu-latest
 
     steps:
@@ -21,6 +21,14 @@ jobs:
           KINGHOST_FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
           KINGHOST_FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           KINGHOST_FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+          KINGHOST_FTP_SERVER_DIR: ${{ secrets.KINGHOST_FTP_SERVER_DIR }}
+          KINGHOST_FTP_PROTOCOL: ${{ secrets.KINGHOST_FTP_PROTOCOL }}
+          KINGHOST_FTP_PORT: ${{ secrets.KINGHOST_FTP_PORT }}
+          KINGHOST_FTP_SECURITY: ${{ secrets.KINGHOST_FTP_SECURITY }}
+          KINGHOST_FTP_TIMEOUT: ${{ secrets.KINGHOST_FTP_TIMEOUT }}
+          KINGHOST_PUBLIC_SERVER_DIR: ${{ secrets.KINGHOST_PUBLIC_SERVER_DIR }}
+          KINGHOST_UPLOAD_VENDOR: ${{ secrets.KINGHOST_UPLOAD_VENDOR }}
+          KINGHOST_LARAVEL_ENV: ${{ secrets.KINGHOST_LARAVEL_ENV }}
         run: |
           missing=0
           for secret_name in KINGHOST_FTP_SERVER KINGHOST_FTP_USERNAME KINGHOST_FTP_PASSWORD; do
@@ -29,7 +37,71 @@ jobs:
               missing=1
             fi
           done
+
+          protocol="${KINGHOST_FTP_PROTOCOL:-ftp}"
+          port="${KINGHOST_FTP_PORT:-21}"
+          security="${KINGHOST_FTP_SECURITY:-strict}"
+          timeout="${KINGHOST_FTP_TIMEOUT:-120000}"
+          server_dir="${KINGHOST_FTP_SERVER_DIR:-./}"
+          public_dir="${KINGHOST_PUBLIC_SERVER_DIR:-./}"
+          if [ "$public_dir" = "www" ] || [ "$public_dir" = "www/" ]; then
+            echo "::warning::KINGHOST_PUBLIC_SERVER_DIR=www/ publishes under /www on pecp.kinghost.net. Using ./ as the active HTTP root."
+            public_dir="./"
+          fi
+          upload_vendor="${KINGHOST_UPLOAD_VENDOR:-false}"
+
+          case "$protocol" in
+            ftp|ftps|ftps-legacy|sftp) ;;
+            *)
+              echo "::error::KINGHOST_FTP_PROTOCOL must be ftp, ftps, ftps-legacy, or sftp."
+              missing=1
+              ;;
+          esac
+
+          if [ -z "$KINGHOST_FTP_PORT" ] && [ "$protocol" = "sftp" ]; then
+            port="22"
+          fi
+
+          if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+            echo "::error::KINGHOST_FTP_PORT must be a numeric port."
+            missing=1
+          fi
+
+          if ! [[ "$timeout" =~ ^[0-9]+$ ]]; then
+            echo "::error::KINGHOST_FTP_TIMEOUT must be a numeric timeout in milliseconds."
+            missing=1
+          fi
+
+          echo "KINGHOST_DEPLOY_PROTOCOL=$protocol" >> "$GITHUB_ENV"
+          echo "KINGHOST_DEPLOY_PORT=$port" >> "$GITHUB_ENV"
+          echo "KINGHOST_DEPLOY_SECURITY=$security" >> "$GITHUB_ENV"
+          echo "KINGHOST_DEPLOY_TIMEOUT=$timeout" >> "$GITHUB_ENV"
+          echo "KINGHOST_FTP_SERVER_DIR=$server_dir" >> "$GITHUB_ENV"
+          echo "KINGHOST_PUBLIC_SERVER_DIR=$public_dir" >> "$GITHUB_ENV"
+          echo "KINGHOST_UPLOAD_VENDOR=$upload_vendor" >> "$GITHUB_ENV"
+
+          if [ -n "$KINGHOST_LARAVEL_ENV" ]; then
+            echo "KINGHOST_UPLOAD_ENV=true" >> "$GITHUB_ENV"
+          else
+            echo "KINGHOST_UPLOAD_ENV=false" >> "$GITHUB_ENV"
+          fi
+
+          echo "KingHost deploy connection: protocol=$protocol port=$port timeout=${timeout}ms"
+          echo "KingHost app directory: $server_dir"
+          echo "KingHost public directory: $public_dir"
+          echo "KingHost upload vendor: $upload_vendor"
+          echo "KingHost upload Laravel env: $([ -n "$KINGHOST_LARAVEL_ENV" ] && echo true || echo false)"
           exit "$missing"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: dom, fileinfo, mbstring, openssl, pdo_mysql, xml, zip
+          coverage: none
+
+      - name: Install PHP dependencies
+        run: composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -43,65 +115,225 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
-      - name: Deploy build to KingHost
-        env:
-          FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+      - name: Write deploy marker
         run: |
-          set -euo pipefail
+          cat > public/deploy-info.json <<EOF
+          {
+            "commit": "${GITHUB_SHA}",
+            "branch": "${GITHUB_REF_NAME}",
+            "deployed_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "workflow": "${GITHUB_WORKFLOW}",
+            "run_id": "${GITHUB_RUN_ID}"
+          }
+          EOF
 
-          python3 <<'PY'
-          import ftplib
-          import os
-          import posixpath
-          from pathlib import Path
+      - name: Prepare Laravel runtime directories
+        run: |
+          mkdir -p storage/app storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+          touch storage/app/.gitignore storage/framework/cache/.gitignore storage/framework/sessions/.gitignore storage/framework/views/.gitignore storage/logs/.gitignore
 
-          server = os.environ["FTP_SERVER"]
-          username = os.environ["FTP_USERNAME"]
-          password = os.environ["FTP_PASSWORD"]
+      - name: Prepare public deploy files
+        run: |
+          public_dir="${KINGHOST_PUBLIC_SERVER_DIR:-./}"
+          public_source="public/"
 
-          local_root = Path("public/build")
-          remote_roots = ["build", "public/build", "www/build"]
+          if [ "$public_dir" = "." ] || [ "$public_dir" = "./" ]; then
+            public_source="/tmp/kinghost-public-root/"
+            rm -rf "$public_source"
+            mkdir -p "$public_source"
+            cp -a public/. "$public_source"
 
-          def ensure_dir(ftp, path):
-              original = ftp.pwd()
-              try:
-                  for part in [p for p in path.split("/") if p and p != "."]:
-                      try:
-                          ftp.cwd(part)
-                      except ftplib.error_perm:
-                          ftp.mkd(part)
-                          ftp.cwd(part)
-              finally:
-                  ftp.cwd(original)
+            php -r '
+              $path = "/tmp/kinghost-public-root/index.php";
+              $contents = file_get_contents($path);
+              $contents = str_replace("__DIR__.\x27/../storage/framework/maintenance.php\x27", "__DIR__.\x27/storage/framework/maintenance.php\x27", $contents);
+              $contents = str_replace("__DIR__.\x27/../vendor/autoload.php\x27", "__DIR__.\x27/vendor/autoload.php\x27", $contents);
+              $contents = str_replace("__DIR__.\x27/../bootstrap/app.php\x27", "__DIR__.\x27/bootstrap/app.php\x27", $contents);
+              file_put_contents($path, $contents);
+            '
 
-          def upload_to_root(remote_root):
-              with ftplib.FTP(server, timeout=60) as ftp:
-                  ftp.login(username, password)
-                  ftp.set_pasv(True)
-                  ftp.cwd(remote_root)
-                  destination_root = ftp.pwd()
-                  print(f"Uploading {local_root} to {destination_root}")
+            cat > "$public_source/.htaccess" <<'EOF'
+          DirectoryIndex index.php
 
-                  for file_path in sorted(local_root.rglob("*")):
-                      if not file_path.is_file():
-                          continue
+          <FilesMatch "^(\.env|\.git|\.htaccess|auth\.json|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|postcss\.config\.js|tailwind\.config\.js|vite\.config\.js|jsconfig\.json|artisan)$">
+              <IfModule mod_authz_core.c>
+                  Require all denied
+              </IfModule>
+              <IfModule !mod_authz_core.c>
+                  Deny from all
+              </IfModule>
+          </FilesMatch>
 
-                      rel = file_path.relative_to(local_root).as_posix()
-                      remote_dir = posixpath.dirname(rel)
-                      remote_name = posixpath.basename(rel)
+          <IfModule mod_rewrite.c>
+              <IfModule mod_negotiation.c>
+                  Options -MultiViews -Indexes
+              </IfModule>
 
-                      ftp.cwd(destination_root)
-                      if remote_dir:
-                          ensure_dir(ftp, remote_dir)
-                          ftp.cwd(posixpath.join(destination_root, remote_dir))
+              RewriteEngine On
 
-                      with file_path.open("rb") as handle:
-                          ftp.storbinary(f"STOR {remote_name}", handle)
+              RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|tests|vendor|www)(/|$) - [F,L]
+              RewriteRule ^(\.env|artisan|auth\.json|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|postcss\.config\.js|tailwind\.config\.js|vite\.config\.js|jsconfig\.json)$ - [F,L]
 
-          for remote_root in remote_roots:
-              upload_to_root(remote_root)
-          PY
+              RewriteCond %{HTTP:Authorization} .
+              RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-          echo "Deploy concluido com sucesso"
+              RewriteCond %{REQUEST_FILENAME} !-d
+              RewriteCond %{REQUEST_URI} (.+)/$
+              RewriteRule ^ %1 [L,R=301]
+
+              RewriteCond %{REQUEST_FILENAME} !-d
+              RewriteCond %{REQUEST_FILENAME} !-f
+              RewriteRule ^ index.php [L]
+          </IfModule>
+          EOF
+
+            cp -a "$public_source"/. ./
+            echo "Prepared root public files in the Laravel app upload directory."
+          fi
+
+          echo "KINGHOST_PUBLIC_DEPLOY_SOURCE=$public_source" >> "$GITHUB_ENV"
+
+      - name: Remove local-only files before upload
+        run: |
+          if [ "${KINGHOST_UPLOAD_VENDOR}" != "true" ]; then
+            rm -rf vendor
+          fi
+          rm -rf node_modules .git .github tests
+          rm -f .env .env.backup .env.production auth.json npm-debug.log yarn-error.log .phpunit.result.cache
+
+      - name: Prepare production Laravel env
+        env:
+          KINGHOST_LARAVEL_ENV: ${{ secrets.KINGHOST_LARAVEL_ENV }}
+        run: |
+          if [ -n "$KINGHOST_LARAVEL_ENV" ]; then
+            printf '%s\n' "$KINGHOST_LARAVEL_ENV" > .env
+            chmod 600 .env
+            echo "Prepared production .env from KINGHOST_LARAVEL_ENV secret."
+          else
+            echo "::warning::KINGHOST_LARAVEL_ENV is not set. Existing remote .env will be preserved."
+          fi
+
+      - name: Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Deploy files to KingHost
+        env:
+          KINGHOST_FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
+          KINGHOST_FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
+          KINGHOST_FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+        run: |
+          protocol="${KINGHOST_DEPLOY_PROTOCOL}"
+          port="${KINGHOST_DEPLOY_PORT}"
+          timeout="${KINGHOST_DEPLOY_TIMEOUT:-120000}"
+          server_dir="${KINGHOST_FTP_SERVER_DIR:-./}"
+          public_dir="${KINGHOST_PUBLIC_SERVER_DIR:-./}"
+          if [ "$public_dir" = "www" ] || [ "$public_dir" = "www/" ]; then
+            public_dir="./"
+          fi
+          public_source="${KINGHOST_PUBLIC_DEPLOY_SOURCE:-public/}"
+          verify_certificate="true"
+
+          if [ "${KINGHOST_DEPLOY_SECURITY}" = "loose" ]; then
+            verify_certificate="false"
+          fi
+
+          cat > /tmp/lftp-settings <<EOF
+          set net:timeout 30
+          set net:max-retries 3
+          set xfer:timeout ${timeout}
+          set net:reconnect-interval-base 5
+          set ftp:passive-mode true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate ${verify_certificate}
+          EOF
+
+          if [ "$protocol" = "ftp" ]; then
+            echo "set ftp:ssl-allow false" >> /tmp/lftp-settings
+            url="ftp://${KINGHOST_FTP_SERVER}:${port}"
+          elif [ "$protocol" = "ftps" ] || [ "$protocol" = "ftps-legacy" ]; then
+            echo "set ftp:ssl-force true" >> /tmp/lftp-settings
+            url="ftp://${KINGHOST_FTP_SERVER}:${port}"
+          else
+            echo "set sftp:auto-confirm yes" >> /tmp/lftp-settings
+            echo "set sftp:connect-program ssh -a -x -o StrictHostKeyChecking=no" >> /tmp/lftp-settings
+            url="sftp://${KINGHOST_FTP_SERVER}:${port}"
+          fi
+
+          echo "Deploying to KingHost with ${protocol} on port ${port}."
+          echo "Deploying Laravel app to ${server_dir}; public files to ${public_dir}."
+          echo "Public upload source: ${public_source}."
+          echo "Vendor upload enabled: ${KINGHOST_UPLOAD_VENDOR}."
+          echo "Laravel env upload enabled: ${KINGHOST_UPLOAD_ENV}."
+
+          lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
+          source /tmp/lftp-settings
+          mirror --reverse --verbose --parallel=2 \
+            --exclude-glob ".git*" \
+            --exclude-glob "node_modules/**" \
+            --exclude-glob "tests/**" \
+            --exclude-glob "www/**" \
+            --exclude-glob "mail/**" \
+            --exclude-glob "logs/**" \
+            --exclude-glob "tmp/**" \
+            --exclude-glob ".env" \
+            --exclude-glob ".env.*" \
+            --exclude-glob "storage/app/**" \
+            --exclude-glob "storage/framework/cache/data/**" \
+            --exclude-glob "storage/framework/sessions/**" \
+            --exclude-glob "storage/framework/views/**" \
+            --exclude-glob "storage/logs/**" \
+            ./ "$server_dir"
+
+          echo "Ensuring Laravel runtime directories exist on KingHost:"
+          mkdir -p "$server_dir/storage/app"
+          mkdir -p "$server_dir/storage/app/private"
+          mkdir -p "$server_dir/storage/framework/cache/data"
+          mkdir -p "$server_dir/storage/framework/sessions"
+          mkdir -p "$server_dir/storage/framework/views"
+          mkdir -p "$server_dir/storage/logs"
+          mkdir -p "$server_dir/endpoints/uploads"
+          mkdir -p "$server_dir/bootstrap/cache"
+          chmod 775 "$server_dir/storage"
+          chmod 775 "$server_dir/storage/app"
+          chmod 775 "$server_dir/storage/app/private"
+          chmod 775 "$server_dir/storage/framework"
+          chmod 775 "$server_dir/storage/framework/cache"
+          chmod 775 "$server_dir/storage/framework/cache/data"
+          chmod 775 "$server_dir/storage/framework/sessions"
+          chmod 775 "$server_dir/storage/framework/views"
+          chmod 775 "$server_dir/storage/logs"
+          chmod 775 "$server_dir/endpoints/uploads"
+          chmod 775 "$server_dir/bootstrap/cache"
+
+          echo "Remote deploy marker:"
+          cat "$server_dir/public/deploy-info.json"
+          bye
+          EOF
+
+          if [ "${KINGHOST_UPLOAD_ENV}" = "true" ]; then
+            echo "Uploading production .env to Laravel app root."
+            lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
+          source /tmp/lftp-settings
+          put .env -o "$server_dir/.env"
+          chmod 600 "$server_dir/.env"
+          cls -l "$server_dir/.env"
+          bye
+          EOF
+          fi
+
+          echo "Deploying public directory to KingHost public root: ${public_dir}"
+
+          lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
+          source /tmp/lftp-settings
+          mirror --reverse --verbose --parallel=2 \
+            --exclude-glob ".env" \
+            --exclude-glob ".env.*" \
+            "$public_source" "$public_dir"
+          chmod 755 "$public_dir"
+          chmod 644 "$public_dir/index.php"
+          chmod 644 "$public_dir/.htaccess"
+          cls -la "$public_dir"
+          echo "Remote public deploy marker:"
+          cat "$public_dir/deploy-info.json"
+          bye
+          EOF
