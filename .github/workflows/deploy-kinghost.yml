@@ -66,13 +66,17 @@ jobs:
 
           lftp -u "$FTP_USERNAME,$FTP_PASSWORD" "ftp://$FTP_SERVER:21" <<EOF
           source /tmp/lftp-settings
+          lcd public/build
           cd "$FTP_BASE_DIR"
 
-          mirror --reverse --verbose --parallel=2 public/build/ build/
+          cd build
+          mirror --reverse --verbose --parallel=2 ./ ./
 
-          mirror --reverse --verbose --parallel=2 public/build/ public/build/
+          cd "$FTP_BASE_DIR/public/build"
+          mirror --reverse --verbose --parallel=2 ./ ./
 
-          mirror --reverse --verbose --parallel=2 public/build/ www/build/
+          cd "$FTP_BASE_DIR/www/build"
+          mirror --reverse --verbose --parallel=2 ./ ./
 
           bye
           EOF
