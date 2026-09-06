@@ -4,7 +4,8 @@ import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, useForm } from '@inertiajs/react';
-import { useEffect, useRef } from 'react';
+import axios from 'axios';
+import { useEffect, useRef, useState } from 'react';
 
 export default function Login({ status, canResetPassword, units = [], selectedUnitId = null }) {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -13,6 +14,8 @@ export default function Login({ status, canResetPassword, units = [], selectedUn
         remember: false,
         unit_id: selectedUnitId ? String(selectedUnitId) : '',
     });
+    const [availableUnits, setAvailableUnits] = useState(units);
+    const [lookupStatus, setLookupStatus] = useState('idle');
     const formRef = useRef(null);
 
     useEffect(() => {
@@ -20,6 +23,57 @@ export default function Login({ status, canResetPassword, units = [], selectedUn
             setData('unit_id', String(selectedUnitId));
         }
     }, [selectedUnitId]);
+
+    useEffect(() => {
+        const username = data.username.trim();
+
+        if (!username) {
+            setAvailableUnits([]);
+            setLookupStatus('idle');
+            setData('unit_id', '');
+            return;
+        }
+
+        setLookupStatus('loading');
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => {
+            axios
+                .get(route('login.units'), {
+                    params: { username },
+                    signal: controller.signal,
+                })
+                .then((response) => {
+                    const userUnits = Array.isArray(response.data?.units) ? response.data.units : [];
+                    setAvailableUnits(userUnits);
+                    setLookupStatus(userUnits.length ? 'found' : 'not-found');
+
+                    const selectedStillAllowed = userUnits.some(
+                        (unit) => String(unit.tb2_id) === String(data.unit_id),
+                    );
+                    const requestedUnit = selectedUnitId
+                        ? userUnits.find((unit) => String(unit.tb2_id) === String(selectedUnitId))
+                        : null;
+
+                    if (!selectedStillAllowed) {
+                        setData('unit_id', requestedUnit ? String(requestedUnit.tb2_id) : '');
+                    }
+                })
+                .catch((error) => {
+                    if (axios.isCancel(error) || error?.code === 'ERR_CANCELED') {
+                        return;
+                    }
+
+                    setAvailableUnits([]);
+                    setLookupStatus('error');
+                    setData('unit_id', '');
+                });
+        }, 300);
+
+        return () => {
+            controller.abort();
+            window.clearTimeout(timeout);
+        };
+    }, [data.username, selectedUnitId]);
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -62,7 +116,9 @@ export default function Login({ status, canResetPassword, units = [], selectedUn
                             className="block w-full border-0 bg-transparent px-4 py-3 shadow-none focus:border-0 focus:ring-0"
                             autoComplete="username"
                             isFocused={true}
-                            onChange={(e) => setData('username', e.target.value)}
+                            onChange={(e) => {
+                                setData('username', e.target.value);
+                            }}
                         />
                         <span className="inline-flex items-center border-s border-slate-300 bg-[#eef2fb] px-4 text-sm text-slate-900">
                             @paoecafepremium.com.br
@@ -109,9 +165,33 @@ export default function Login({ status, canResetPassword, units = [], selectedUn
                 <div className="pt-2">
                     <p className="text-sm font-medium text-slate-700">Escolha a unidade</p>
 
-                    {units.length ? (
+                    {lookupStatus === 'idle' && (
+                        <p className="mt-3 text-sm text-slate-600">
+                            Digite o usuario para carregar as unidades liberadas.
+                        </p>
+                    )}
+
+                    {lookupStatus === 'loading' && (
+                        <p className="mt-3 text-sm text-slate-600">
+                            Buscando unidades do usuario...
+                        </p>
+                    )}
+
+                    {lookupStatus === 'not-found' && (
+                        <p className="mt-3 text-sm text-slate-600">
+                            Usuario nao encontrado ou sem unidade ativa vinculada.
+                        </p>
+                    )}
+
+                    {lookupStatus === 'error' && (
+                        <p className="mt-3 text-sm text-red-600">
+                            Nao foi possivel buscar as unidades agora.
+                        </p>
+                    )}
+
+                    {availableUnits.length > 0 && (
                         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                            {units.map((unit) => {
+                            {availableUnits.map((unit) => {
                                 const isSelected = String(data.unit_id) === String(unit.tb2_id);
 
                                 return (
@@ -131,10 +211,6 @@ export default function Login({ status, canResetPassword, units = [], selectedUn
                                 );
                             })}
                         </div>
-                    ) : (
-                        <p className="mt-3 text-sm text-slate-600">
-                            Nenhuma unidade cadastrada.
-                        </p>
                     )}
 
                     <InputError message={errors.unit_id} className="mt-2" />

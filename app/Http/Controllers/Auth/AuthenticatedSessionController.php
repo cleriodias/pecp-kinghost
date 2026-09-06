@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 use Inertia\Inertia;
@@ -24,24 +25,59 @@ use Inertia\Response;
 
 class AuthenticatedSessionController extends Controller
 {
+    private const LOGIN_DOMAIN = '@paoecafepremium.com.br';
+
     /**
      * Display the login view.
      */
     public function create(Request $request): Response
     {
         $requestedUnitId = (int) $request->query('l', 0);
-        $unitsQuery = Unidade::active()->orderBy('tb2_nome');
-
-        if ($requestedUnitId > 0) {
-            $unitsQuery->where('tb2_id', $requestedUnitId);
-        }
 
         return Inertia::render('Auth/Login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
             'selectedUnitId' => $requestedUnitId > 0 ? $requestedUnitId : null,
-            'units' => $unitsQuery->get(['tb2_id', 'tb2_nome']),
+            'units' => [],
         ]);
+    }
+
+    public function userUnits(Request $request)
+    {
+        $validated = $request->validate([
+            'username' => ['required', 'string', 'max:255'],
+        ]);
+
+        $email = $this->emailFromUsername($validated['username']);
+        $user = User::query()
+            ->active()
+            ->where('email', $email)
+            ->whereRaw('COALESCE(funcao_original, funcao) not in (?, ?)', [5, 6])
+            ->with([
+                'primaryUnit' => fn ($query) => $query
+                    ->active()
+                    ->select('tb2_id', 'tb2_nome'),
+                'units' => fn ($query) => $query
+                    ->active()
+                    ->select('tb2_unidades.tb2_id', 'tb2_unidades.tb2_nome'),
+            ])
+            ->first();
+
+        if (! $user) {
+            return response()->json(['units' => []]);
+        }
+
+        $units = $user->units
+            ->when($user->primaryUnit, fn ($collection) => $collection->push($user->primaryUnit))
+            ->unique('tb2_id')
+            ->sortBy('tb2_nome', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->map(fn (Unidade $unit) => [
+                'tb2_id' => $unit->tb2_id,
+                'tb2_nome' => $unit->tb2_nome,
+            ]);
+
+        return response()->json(['units' => $units]);
     }
 
     /**
@@ -236,5 +272,12 @@ class AuthenticatedSessionController extends Controller
             '/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i',
             $userAgent
         );
+    }
+
+    private function emailFromUsername(string $username): string
+    {
+        $normalizedUsername = Str::before(trim($username), '@');
+
+        return Str::lower($normalizedUsername . self::LOGIN_DOMAIN);
     }
 }

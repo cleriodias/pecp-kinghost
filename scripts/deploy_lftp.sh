@@ -17,6 +17,9 @@ upload_tree() {
     fi
 
     curl.exe --fail --silent --show-error \
+      --retry 5 \
+      --retry-delay 2 \
+      --retry-all-errors \
       --ftp-create-dirs \
       --user "$FTP_USERNAME:$FTP_PASSWORD" \
       -T "$file" \

@@ -109,28 +109,28 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                 className="relative min-h-screen overflow-hidden bg-[var(--surface)] text-[var(--ink)]"
                 style={{
                     fontFamily: "'Space Grotesk', sans-serif",
-                    '--surface': '#fff7f2',
-                    '--ink': '#0f172a',
-                    '--accent': '#e11d48',
-                    '--accent-strong': '#be123c',
+                    '--surface': '#090b12',
+                    '--ink': '#f8fafc',
+                    '--accent': '#f43f5e',
+                    '--accent-strong': '#fb7185',
                 }}
             >
-                <div className="pointer-events-none absolute -top-24 right-10 h-72 w-72 rounded-full bg-amber-300/40 blur-[120px]" />
-                <div className="pointer-events-none absolute -bottom-20 left-0 h-96 w-96 rounded-full bg-rose-400/30 blur-[140px]" />
-                <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:radial-gradient(circle_at_top,#ffffff_0%,rgba(255,255,255,0)_60%)]" />
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(244,63,94,0.3),transparent_30%),radial-gradient(circle_at_85%_5%,rgba(251,191,36,0.2),transparent_26%),linear-gradient(135deg,#090b12_0%,#111827_48%,#190b12_100%)]" />
+                <div className="pointer-events-none absolute inset-0 opacity-[0.2] [background-image:linear-gradient(rgba(255,255,255,0.11)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.11)_1px,transparent_1px)] [background-size:42px_42px]" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white/[0.07] to-transparent" />
 
                 <div className="relative">
                     <main className="mx-auto w-full max-w-6xl px-6 pb-16 pt-10 lg:pt-6">
                         <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
                             <div>
                                 <span
-                                    className="reveal-up inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-700 shadow-sm"
+                                    className="reveal-up inline-flex items-center gap-2 rounded-full border border-rose-300/40 bg-white/[0.1] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-100 shadow-sm shadow-black/20 backdrop-blur"
                                     style={{ animationDelay: '0.05s' }}
                                 >
                                     PADARIA
                                 </span>
                                 <h1
-                                    className="reveal-up mt-5 text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl"
+                                    className="reveal-up mt-5 text-4xl font-semibold leading-tight text-white sm:text-5xl"
                                     style={{
                                         fontFamily: "'Playfair Display', serif",
                                         animationDelay: '0.12s',
@@ -139,7 +139,7 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                     PÃO & CAFÉ.
                                 </h1>
                                 <p
-                                    className="reveal-up mt-4 text-base text-slate-600 sm:text-lg"
+                                    className="reveal-up mt-4 text-base text-slate-200 sm:text-lg"
                                     style={{ animationDelay: '0.2s' }}
                                 >
                                     Qualidade, variedade e preço baixo, venha conferir.
@@ -147,7 +147,7 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                 <div className="reveal-up mt-6 flex flex-wrap gap-3" style={{ animationDelay: '0.28s' }}>
                                     <Link
                                         href={loginHref}
-                                        className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-800"
+                                        className="rounded-full bg-rose-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-950/40 transition hover:bg-rose-400"
                                     >
                                         Login
                                     </Link>
@@ -157,7 +157,7 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                     className="reveal-up mt-8 grid gap-4 sm:grid-cols-2"
                                     style={{ animationDelay: '0.36s' }}
                                 >
-                                    <div className="rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm">
+                                    <div className="rounded-2xl border border-white/15 bg-white/[0.1] p-4 shadow-sm shadow-black/20 backdrop-blur">
                                         <div className="flex items-center gap-3">
                                             <button
                                                 type="button"
@@ -165,24 +165,24 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                                 aria-expanded={showNewsletterForm}
                                                 aria-controls="newsletter-form"
                                                 aria-label="Abrir cadastro do WhatsApp"
-                                                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 transition hover:bg-emerald-200"
+                                                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-300/20 transition hover:bg-emerald-400/25"
                                             >
                                                 <i className="bi bi-whatsapp text-lg" aria-hidden="true" />
                                             </button>
                                             <div>
-                                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">
+                                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-300">
                                                     PÃO QUENTINHO
                                                 </p>
-                                                <p className="mt-1 text-xs text-slate-500">WhatsApp.</p>
+                                                <p className="mt-1 text-xs text-slate-400">WhatsApp.</p>
                                             </div>
                                         </div>
-                                        <p className="mt-3 text-sm text-slate-600">
+                                        <p className="mt-3 text-sm text-slate-200">
                                             Voce recebera informacoes de produtos feitos na hora.
                                         </p>
                                         {showNewsletterForm && (
                                             <form id="newsletter-form" className="mt-4 space-y-3" onSubmit={submitNewsletter}>
                                                 <div>
-                                                    <label className="text-xs font-semibold text-slate-600">Nome</label>
+                                                    <label className="text-xs font-semibold text-slate-300">Nome</label>
                                                     <input
                                                         type="text"
                                                         name="name"
@@ -190,14 +190,14 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                                         autoComplete="name"
                                                         placeholder="Digite seu nome"
                                                         onChange={(event) => setData('name', event.target.value)}
-                                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-200"
+                                                        className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-rose-300/70 focus:ring-2 focus:ring-rose-400/20"
                                                     />
                                                     {errors.name && (
                                                         <p className="mt-1 text-xs text-rose-600">{errors.name}</p>
                                                     )}
                                                 </div>
                                                 <div>
-                                                    <label className="text-xs font-semibold text-slate-600">WhatsApp</label>
+                                                    <label className="text-xs font-semibold text-slate-300">WhatsApp</label>
                                                     <input
                                                         type="tel"
                                                         name="phone"
@@ -206,7 +206,7 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                                         inputMode="tel"
                                                         placeholder="(00) 00000-0000"
                                                         onChange={(event) => setData('phone', event.target.value)}
-                                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-200"
+                                                        className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-rose-300/70 focus:ring-2 focus:ring-rose-400/20"
                                                     />
                                                     {errors.phone && (
                                                         <p className="mt-1 text-xs text-rose-600">{errors.phone}</p>
@@ -215,21 +215,21 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                                 <button
                                                     type="submit"
                                                     disabled={processing}
-                                                    className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                                                 >
                                                     Quero receber
                                                 </button>
                                                 {successText && (
-                                                    <p className="text-xs font-semibold text-emerald-600">{successText}</p>
+                                                    <p className="text-xs font-semibold text-emerald-300">{successText}</p>
                                                 )}
                                             </form>
                                         )}
                                     </div>
-                                    <div className="rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm">
-                                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">
+                                    <div className="rounded-2xl border border-white/15 bg-white/[0.1] p-4 shadow-sm shadow-black/20 backdrop-blur">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-300">
                                             CARTÃO FIDELIDADE
                                         </p>
-                                        <p className="mt-2 text-sm text-slate-600">
+                                        <p className="mt-2 text-sm text-slate-200">
                                             Aproveite nossas vantegns, toda compra gera um bonus.
                                         </p>
                                     </div>
@@ -238,12 +238,12 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
 
                             <div className="relative">
                                 <div
-                                    className="reveal-up rounded-3xl border border-white/70 bg-white/75 p-6 shadow-xl backdrop-blur"
+                                    className="reveal-up rounded-3xl border border-white/15 bg-slate-950/70 p-6 shadow-2xl shadow-black/30 backdrop-blur"
                                     style={{ animationDelay: '0.2s' }}
                                 >
                                     <div className="flex items-center justify-between">
-                                        <p className="text-sm font-semibold text-slate-700">Nossas Unidades</p>
-                                        <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-600">
+                                        <p className="text-sm font-semibold text-slate-200">Nossas Unidades</p>
+                                        <span className="rounded-full bg-rose-400/15 px-3 py-1 text-xs font-semibold text-rose-200 ring-1 ring-rose-300/20">
                                             {validUnits.length} unidade{validUnits.length === 1 ? '' : 's'}
                                         </span>
                                     </div>
@@ -251,14 +251,14 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                         {validUnits.slice(0, 3).map((unit) => (
                                             <div
                                                 key={unit.tb2_id}
-                                                className="rounded-2xl border border-rose-100 bg-rose-50/60 p-4"
+                                                className="rounded-2xl border border-rose-200/25 bg-rose-950/35 p-4"
                                             >
-                                                <p className="text-sm font-semibold text-slate-800">{unit.tb2_nome}</p>
-                                                <p className="mt-1 text-xs text-slate-600">{unit.tb2_endereco}</p>
+                                                <p className="text-sm font-semibold text-white">{unit.tb2_nome}</p>
+                                                <p className="mt-1 text-xs text-slate-300">{unit.tb2_endereco}</p>
                                             </div>
                                         ))}
                                         {validUnits.length === 0 && (
-                                            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-600">
+                                            <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.04] p-4 text-sm text-slate-300">
                                                 Nenhuma unidade cadastrada ainda. Cadastre para aparecer aqui.
                                             </div>
                                         )}
@@ -281,19 +281,19 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                         return (
                                             <div
                                                 key={unit.tb2_id}
-                                                className="reveal-up flex h-full flex-col rounded-3xl border border-white/70 bg-white/80 p-5 shadow-md transition hover:-translate-y-1 hover:shadow-lg"
+                                                className="reveal-up flex h-full flex-col rounded-3xl border border-white/15 bg-white/[0.11] p-5 shadow-lg shadow-black/25 backdrop-blur transition hover:-translate-y-1 hover:border-rose-200/35 hover:bg-white/[0.14]"
                                                 style={{ animationDelay: `${Math.min(index * 0.06, 0.3)}s` }}
                                             >
                                                 <div className="flex items-start justify-between gap-4">
-                                                    <h3 className="text-lg font-semibold text-slate-900">
+                                                    <h3 className="text-lg font-semibold text-white">
                                                         {unit.tb2_nome}
                                                     </h3>
-                                                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                                                    <span className="rounded-full bg-amber-300/15 px-3 py-1 text-xs font-semibold text-amber-200 ring-1 ring-amber-200/20">
                                                         {unit.tb2_id}
                                                     </span>
                                                 </div>
                                                 {mapEmbedUrl && (
-                                                    <div className="mt-4 overflow-hidden rounded-2xl border border-white/70 bg-white/70">
+                                                    <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
                                                         <iframe
                                                             title={`Mapa da unidade ${unit.tb2_nome}`}
                                                             src={mapEmbedUrl}
@@ -309,8 +309,8 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                         );
                                     })
                                 ) : (
-                                    <div className="reveal-up col-span-full rounded-3xl border border-dashed border-rose-200 bg-white/80 p-10 text-center text-slate-600">
-                                        <p className="text-base font-semibold text-slate-700">
+                                    <div className="reveal-up col-span-full rounded-3xl border border-dashed border-rose-200/25 bg-white/[0.06] p-10 text-center text-slate-300">
+                                        <p className="text-base font-semibold text-slate-100">
                                             Nenhuma unidade cadastrada no momento.
                                         </p>
                                         <p className="mt-2 text-sm">
@@ -318,7 +318,7 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                                         </p>
                                         <Link
                                             href={loginHref}
-                                            className="mt-6 inline-flex rounded-full border border-rose-200 bg-rose-50 px-5 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
+                                            className="mt-6 inline-flex rounded-full border border-rose-300/30 bg-rose-400/10 px-5 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200/60 hover:bg-rose-400/20"
                                         >
                                             Login
                                         </Link>
@@ -328,12 +328,12 @@ export default function Welcome({ units = [], flash = {}, selectedUnitId = null 
                         </section>
                     </main>
 
-                    <footer className="border-t border-white/70 bg-white/70">
-                        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-3 px-6 py-6 text-sm text-slate-500 sm:flex-row">
+                    <footer className="border-t border-white/10 bg-black/25 backdrop-blur">
+                        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-3 px-6 py-6 text-sm text-slate-400 sm:flex-row">
                             <p>
                                 @ {currentYear} {appName}. Pão & Café Todos os direitos reservados.
                             </p>
-                            <p className="text-xs uppercase tracking-[0.2em] text-rose-500">Bem-vindo</p>
+                            <p className="text-xs uppercase tracking-[0.2em] text-rose-300">Bem-vindo</p>
                         </div>
                     </footer>
                 </div>

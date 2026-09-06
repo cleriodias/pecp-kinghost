@@ -1,0 +1,84 @@
+name: Deploy KingHost
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: kinghost-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy frontend assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate FTP secrets
+        env:
+          KINGHOST_FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
+          KINGHOST_FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
+          KINGHOST_FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+        run: |
+          missing=0
+          for secret_name in KINGHOST_FTP_SERVER KINGHOST_FTP_USERNAME KINGHOST_FTP_PASSWORD; do
+            if [ -z "${!secret_name}" ]; then
+              echo "::error::GitHub Actions secret ${secret_name} is required for KingHost deploy."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Deploy build to KingHost
+        env:
+          FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          upload_tree() {
+            local local_root="$1"
+            local remote_root="$2"
+
+            local_root="${local_root%/}"
+            remote_root="${remote_root%/}"
+
+            while IFS= read -r -d '' file; do
+              local rel="${file#"$local_root"/}"
+              local remote_path="$rel"
+
+              if [ -n "$remote_root" ] && [ "$remote_root" != "." ]; then
+                remote_path="$remote_root/$rel"
+              fi
+
+              curl --fail --silent --show-error \
+                --retry 5 \
+                --retry-delay 2 \
+                --retry-all-errors \
+                --ftp-create-dirs \
+                --user "$FTP_USERNAME:$FTP_PASSWORD" \
+                -T "$file" \
+                "ftp://$FTP_SERVER:21/$remote_path"
+            done < <(find "$local_root" -type f -print0)
+          }
+
+          upload_tree "public/build" "build"
+          upload_tree "public/build" "public/build"
+          upload_tree "public/build" "www/build"
+
+          echo "Deploy concluido com sucesso"
