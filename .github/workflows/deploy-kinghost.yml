@@ -51,7 +51,7 @@ jobs:
           FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
-          FTP_BASE_DIR: ${{ secrets.KINGHOST_FTP_BASE_DIR || '/home/pecp' }}
+          FTP_BASE_DIR: ${{ secrets.KINGHOST_FTP_BASE_DIR || '.' }}
         run: |
           set -euo pipefail
 
@@ -72,14 +72,13 @@ jobs:
           cd build
           mirror --reverse --verbose --parallel=2 ./ ./
 
-          cd "$FTP_BASE_DIR/public/build"
+          cd ../public/build
           mirror --reverse --verbose --parallel=2 ./ ./
 
-          cd "$FTP_BASE_DIR/www/build"
+          cd ../../www/build
           mirror --reverse --verbose --parallel=2 ./ ./
 
           bye
           EOF
 
           echo "Deploy concluido com sucesso"
-
