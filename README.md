@@ -247,7 +247,7 @@ APP_STORAGE=/home/paoecafe83/storage
 
 - O deploy principal acontece pelo workflow `.github/workflows/deploy-kinghost.yml`.
 - O workflow e acionado manualmente pelo `workflow_dispatch` em GitHub Actions.
-- O pipeline gera os assets Vite e envia `public/build` para os diretorios `build/`, `public/build/` e `www/build/` ja existentes na KingHost usando `lftp`.
+- O pipeline gera os assets Vite e envia `public/build` para os diretorios `build/`, `public/build/` e `www/build/` na KingHost usando FTP pelo Python.
 - O workflow nao roda migrations nem altera o banco de dados.
 - O workflow nao envia `.env`, credenciais, codigo PHP, `node_modules`, testes, `.git` ou arquivos privados de `storage`.
 
@@ -260,9 +260,7 @@ APP_STORAGE=/home/paoecafe83/storage
 
 ### Secrets opcionais
 
-- `KINGHOST_FTP_PROTOCOL`: padrao `ftp`; valores aceitos: `ftp`, `ftps`, `ftps-legacy`, `sftp`.
 - `KINGHOST_FTP_PORT`: padrao `21`.
-- `KINGHOST_FTP_SECURITY`: padrao `strict`; pode ser `loose` se o certificado FTPS da hospedagem nao validar no runner.
 - `KINGHOST_FTP_TIMEOUT`: padrao `120000`, tempo limite de transferencia em milissegundos.
 
 ### Passos iniciais no servidor

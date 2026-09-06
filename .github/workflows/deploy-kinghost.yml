@@ -22,9 +22,7 @@ jobs:
           KINGHOST_FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           KINGHOST_FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
           KINGHOST_FTP_SERVER_DIR: ${{ secrets.KINGHOST_FTP_SERVER_DIR }}
-          KINGHOST_FTP_PROTOCOL: ${{ secrets.KINGHOST_FTP_PROTOCOL }}
           KINGHOST_FTP_PORT: ${{ secrets.KINGHOST_FTP_PORT }}
-          KINGHOST_FTP_SECURITY: ${{ secrets.KINGHOST_FTP_SECURITY }}
           KINGHOST_FTP_TIMEOUT: ${{ secrets.KINGHOST_FTP_TIMEOUT }}
         run: |
           missing=0
@@ -35,26 +33,12 @@ jobs:
             fi
           done
 
-          protocol="${KINGHOST_FTP_PROTOCOL:-ftp}"
           port="${KINGHOST_FTP_PORT:-21}"
-          security="${KINGHOST_FTP_SECURITY:-strict}"
           timeout="${KINGHOST_FTP_TIMEOUT:-300000}"
           server_dir="${KINGHOST_FTP_SERVER_DIR:-./}"
 
           if [ "$server_dir" = "~" ] || [ "$server_dir" = "~/" ] || [[ "$server_dir" == /home/* ]]; then
             server_dir="./"
-          fi
-
-          case "$protocol" in
-            ftp|ftps|ftps-legacy|sftp) ;;
-            *)
-              echo "::error::KINGHOST_FTP_PROTOCOL must be ftp, ftps, ftps-legacy, or sftp."
-              missing=1
-              ;;
-          esac
-
-          if [ -z "$KINGHOST_FTP_PORT" ] && [ "$protocol" = "sftp" ]; then
-            port="22"
           fi
 
           if ! [[ "$port" =~ ^[0-9]+$ ]]; then
@@ -67,13 +51,11 @@ jobs:
             missing=1
           fi
 
-          echo "KINGHOST_DEPLOY_PROTOCOL=$protocol" >> "$GITHUB_ENV"
           echo "KINGHOST_DEPLOY_PORT=$port" >> "$GITHUB_ENV"
-          echo "KINGHOST_DEPLOY_SECURITY=$security" >> "$GITHUB_ENV"
           echo "KINGHOST_DEPLOY_TIMEOUT=$timeout" >> "$GITHUB_ENV"
           echo "KINGHOST_FTP_SERVER_DIR=$server_dir" >> "$GITHUB_ENV"
 
-          echo "KingHost deploy connection: protocol=$protocol port=$port timeout=${timeout}ms"
+          echo "KingHost deploy connection: protocol=ftp port=$port timeout=${timeout}ms"
           echo "KingHost FTP root: $server_dir"
           exit "$missing"
 
@@ -89,58 +71,95 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
-      - name: Install lftp
-        run: sudo apt-get update && sudo apt-get install -y lftp
-
       - name: Deploy build to KingHost
         env:
           KINGHOST_FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
           KINGHOST_FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           KINGHOST_FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
         run: |
-          protocol="${KINGHOST_DEPLOY_PROTOCOL}"
-          port="${KINGHOST_DEPLOY_PORT}"
-          timeout="${KINGHOST_DEPLOY_TIMEOUT}"
-          server_dir="${KINGHOST_FTP_SERVER_DIR:-./}"
-          verify_certificate="true"
+          python3 <<'PY'
+          import ftplib
+          import os
+          import posixpath
+          import time
+          from pathlib import Path
 
-          if [ "${KINGHOST_DEPLOY_SECURITY}" = "loose" ]; then
-            verify_certificate="false"
-          fi
+          server = os.environ["KINGHOST_FTP_SERVER"]
+          username = os.environ["KINGHOST_FTP_USERNAME"]
+          password = os.environ["KINGHOST_FTP_PASSWORD"]
+          port = int(os.environ.get("KINGHOST_DEPLOY_PORT", "21"))
+          timeout = int(os.environ.get("KINGHOST_DEPLOY_TIMEOUT", "300000")) / 1000
+          ftp_root = os.environ.get("KINGHOST_FTP_SERVER_DIR", "./").strip()
 
-          cat > /tmp/lftp-settings <<EOF
-          set cmd:fail-exit true
-          set net:timeout 60
-          set net:max-retries 5
-          set xfer:timeout ${timeout}
-          set net:reconnect-interval-base 5
-          set ftp:passive-mode true
-          set ssl:verify-certificate ${verify_certificate}
-          EOF
+          if not ftp_root or ftp_root in {".", "./", "~", "~/"} or ftp_root.startswith("/home/"):
+              ftp_root = ""
+          ftp_root = ftp_root.strip("/")
 
-          if [ "$protocol" = "ftp" ]; then
-            echo "set ftp:ssl-allow false" >> /tmp/lftp-settings
-            url="ftp://${KINGHOST_FTP_SERVER}:${port}"
-          elif [ "$protocol" = "ftps" ] || [ "$protocol" = "ftps-legacy" ]; then
-            echo "set ftp:ssl-force true" >> /tmp/lftp-settings
-            echo "set ftp:ssl-protect-data true" >> /tmp/lftp-settings
-            url="ftp://${KINGHOST_FTP_SERVER}:${port}"
-          else
-            echo "set sftp:auto-confirm yes" >> /tmp/lftp-settings
-            echo "set sftp:connect-program ssh -a -x -o StrictHostKeyChecking=no" >> /tmp/lftp-settings
-            url="sftp://${KINGHOST_FTP_SERVER}:${port}"
-          fi
+          local_root = Path("public/build")
+          remote_roots = ["build", "public/build", "www/build"]
 
-          echo "Deploying Vite build assets to KingHost with ${protocol} on port ${port}."
-          echo "FTP root: ${server_dir}"
+          if not local_root.is_dir():
+              raise SystemExit("public/build was not generated by npm run build.")
 
-          lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
-          source /tmp/lftp-settings
-          cd "$server_dir"
-          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build ./build
-          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build ./public/build
-          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build ./www/build
-          bye
-          EOF
+          def retry(operation, label, attempts=5):
+              last_error = None
+              for attempt in range(1, attempts + 1):
+                  try:
+                      return operation()
+                  except (OSError, EOFError, ftplib.Error) as error:
+                      last_error = error
+                      if attempt == attempts:
+                          break
+                      print(f"{label} failed on attempt {attempt}; retrying in 5s: {error}")
+                      time.sleep(5)
+              raise RuntimeError(f"{label} failed after {attempts} attempts: {last_error}")
+
+          def connect():
+              ftp = ftplib.FTP()
+              ftp.connect(server, port, timeout=timeout)
+              ftp.login(username, password)
+              ftp.set_pasv(True)
+              return ftp
+
+          def ensure_dir(ftp, path):
+              for part in [part for part in path.split("/") if part and part != "."]:
+                  try:
+                      ftp.cwd(part)
+                  except ftplib.error_perm:
+                      ftp.mkd(part)
+                      ftp.cwd(part)
+
+          def upload_tree(remote_root):
+              with connect() as ftp:
+                  if ftp_root:
+                      ftp.cwd(ftp_root)
+                  start_dir = ftp.pwd()
+                  ensure_dir(ftp, remote_root)
+                  destination_root = ftp.pwd()
+                  print(f"Uploading {local_root} to {destination_root}")
+
+                  for file_path in sorted(local_root.rglob("*")):
+                      if not file_path.is_file():
+                          continue
+
+                      rel = file_path.relative_to(local_root).as_posix()
+                      remote_dir = posixpath.dirname(rel)
+                      remote_name = posixpath.basename(rel)
+
+                      def upload_file():
+                          ftp.cwd(destination_root)
+                          if remote_dir:
+                              ensure_dir(ftp, remote_dir)
+                          with file_path.open("rb") as handle:
+                              ftp.storbinary(f"STOR {remote_name}", handle)
+
+                      retry(upload_file, f"upload {remote_root}/{rel}")
+
+                  ftp.cwd(start_dir)
+
+          print(f"Deploying Vite build assets to KingHost FTP root: {ftp_root or './'}")
+          for remote_root in remote_roots:
+              retry(lambda root=remote_root: upload_tree(root), f"upload tree {remote_root}")
+          PY
 
           echo "Deploy concluido com sucesso"
