@@ -132,6 +132,15 @@ jobs:
           mkdir -p storage/app storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
           touch storage/app/.gitignore storage/framework/cache/.gitignore storage/framework/sessions/.gitignore storage/framework/views/.gitignore storage/logs/.gitignore
 
+      - name: Prepare fiscal CA bundle fallback
+        run: |
+          if [ -f storage/app/private/fiscal-ca-bundle.pem ]; then
+            cp storage/app/private/fiscal-ca-bundle.pem cacert.pem
+            echo "Prepared fiscal CA bundle fallback."
+          else
+            echo "Fiscal CA bundle not present in this repository; skipping."
+          fi
+
       - name: Prepare public deploy files
         run: |
           public_dir="${KINGHOST_PUBLIC_SERVER_DIR:-./}"
@@ -221,11 +230,12 @@ jobs:
           KINGHOST_FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
           KINGHOST_FTP_USERNAME: ${{ secrets.KINGHOST_FTP_USERNAME }}
           KINGHOST_FTP_PASSWORD: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+          KINGHOST_FTP_SERVER_DIR: ${{ secrets.KINGHOST_FTP_SERVER_DIR }}
+          KINGHOST_PUBLIC_SERVER_DIR: ${{ secrets.KINGHOST_PUBLIC_SERVER_DIR }}
         run: |
           protocol="${KINGHOST_DEPLOY_PROTOCOL}"
           port="${KINGHOST_DEPLOY_PORT}"
-          timeout="${KINGHOST_DEPLOY_TIMEOUT:-120000}"
-          server_dir="${KINGHOST_FTP_SERVER_DIR:-./}"
+          server_dir="${KINGHOST_FTP_SERVER_DIR}"
           public_dir="${KINGHOST_PUBLIC_SERVER_DIR:-./}"
           if [ "$public_dir" = "www" ] || [ "$public_dir" = "www/" ]; then
             public_dir="./"
@@ -238,14 +248,26 @@ jobs:
           fi
 
           cat > /tmp/lftp-settings <<EOF
-          set cmd:fail-exit true
-          set net:timeout 60
-          set net:max-retries 5
-          set xfer:timeout ${timeout}
+          set net:timeout 30
+          set net:max-retries 3
           set net:reconnect-interval-base 5
           set ftp:passive-mode true
+          set ftp:ssl-protect-data true
           set ssl:verify-certificate ${verify_certificate}
           EOF
+
+          : > /tmp/lftp-ca-upload
+          if [ -f storage/app/private/fiscal-ca-bundle.pem ]; then
+            cat > /tmp/lftp-ca-upload <<EOF
+          echo "Uploading fiscal CA bundle:"
+          put storage/app/private/fiscal-ca-bundle.pem -o "$server_dir/storage/app/private/fiscal-ca-bundle.pem"
+          put cacert.pem -o "$server_dir/cacert.pem"
+          chmod 644 "$server_dir/storage/app/private/fiscal-ca-bundle.pem"
+          chmod 644 "$server_dir/cacert.pem"
+          cls -l "$server_dir/storage/app/private/fiscal-ca-bundle.pem"
+          cls -l "$server_dir/cacert.pem"
+          EOF
+          fi
 
           if [ "$protocol" = "ftp" ]; then
             echo "set ftp:ssl-allow false" >> /tmp/lftp-settings
@@ -263,16 +285,12 @@ jobs:
           echo "Deploying to KingHost with ${protocol} on port ${port}."
           echo "Deploying Laravel app to ${server_dir}; public files to ${public_dir}."
           echo "Public upload source: ${public_source}."
-          echo "App upload enabled: ${KINGHOST_UPLOAD_APP}."
           echo "Vendor upload enabled: ${KINGHOST_UPLOAD_VENDOR}."
           echo "Laravel env upload enabled: ${KINGHOST_UPLOAD_ENV}."
 
-          if [ "${KINGHOST_UPLOAD_APP}" = "true" ]; then
-            echo "Deploying Laravel app files to KingHost app root: ${server_dir}"
-
           lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
           source /tmp/lftp-settings
-          mirror --reverse --verbose --parallel=1 \
+          mirror --reverse --verbose --parallel=2 \
             --exclude-glob ".git*" \
             --exclude-glob "node_modules/**" \
             --exclude-glob "tests/**" \
@@ -282,36 +300,68 @@ jobs:
             --exclude-glob "tmp/**" \
             --exclude-glob ".env" \
             --exclude-glob ".env.*" \
-            --exclude-glob "storage/**" \
-            --exclude-glob "bootstrap/cache/**" \
+            --exclude-glob "storage/app/**" \
+            --exclude-glob "storage/framework/cache/data/**" \
+            --exclude-glob "storage/framework/sessions/**" \
+            --exclude-glob "storage/framework/views/**" \
+            --exclude-glob "storage/logs/**" \
             ./ "$server_dir"
-
+          echo "Ensuring Laravel runtime directories exist on KingHost:"
+          mkdir -p "$server_dir/storage/app"
+          mkdir -p "$server_dir/storage/app/private"
+          mkdir -p "$server_dir/storage/framework/cache/data"
+          mkdir -p "$server_dir/storage/framework/sessions"
+          mkdir -p "$server_dir/storage/framework/views"
+          mkdir -p "$server_dir/storage/logs"
+          mkdir -p "$server_dir/endpoints/uploads"
+          mkdir -p "$server_dir/bootstrap/cache"
+          chmod 775 "$server_dir/storage"
+          chmod 775 "$server_dir/storage/app"
+          chmod 775 "$server_dir/storage/app/private"
+          chmod 775 "$server_dir/storage/framework"
+          chmod 775 "$server_dir/storage/framework/cache"
+          chmod 775 "$server_dir/storage/framework/cache/data"
+          chmod 775 "$server_dir/storage/framework/sessions"
+          chmod 775 "$server_dir/storage/framework/views"
+          chmod 775 "$server_dir/storage/logs"
+          chmod 775 "$server_dir/endpoints/uploads"
+          chmod 775 "$server_dir/bootstrap/cache"
+          cls -ld "$server_dir/storage/framework/cache/data"
+          cls -ld "$server_dir/storage/framework/sessions"
+          cls -ld "$server_dir/storage/framework/views"
+          cls -ld "$server_dir/storage/logs"
+          cls -ld "$server_dir/endpoints/uploads"
+          cls -ld "$server_dir/bootstrap/cache"
+          source /tmp/lftp-ca-upload
           echo "Remote deploy marker:"
           cat "$server_dir/public/deploy-info.json"
           bye
           EOF
-          else
-            echo "Skipping Laravel app upload. Set KINGHOST_UPLOAD_APP=true to upload app files."
-          fi
 
-          if [ "${KINGHOST_UPLOAD_ENV}" = "true" ] && [ "${KINGHOST_UPLOAD_APP}" = "true" ]; then
+          if [ "${KINGHOST_UPLOAD_ENV}" = "true" ]; then
             echo "Uploading production .env to Laravel app root."
             lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
           source /tmp/lftp-settings
           put .env -o "$server_dir/.env"
+          chmod 600 "$server_dir/.env"
           cls -l "$server_dir/.env"
           bye
           EOF
           fi
 
-          echo "Deploying Vite build assets to KingHost build directories."
+          echo "Deploying public directory to KingHost public root: ${public_dir}"
 
           lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
           source /tmp/lftp-settings
-          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build build
-          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build public/build
-          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build www/build
-          echo "Remote build manifest:"
-          cat build/manifest.json
+          mirror --reverse --verbose --parallel=2 \
+            --exclude-glob ".env" \
+            --exclude-glob ".env.*" \
+            "$public_source" "$public_dir"
+          chmod 755 "$public_dir"
+          chmod 644 "$public_dir/index.php"
+          chmod 644 "$public_dir/.htaccess"
+          cls -la "$public_dir"
+          echo "Remote public deploy marker:"
+          cat "$public_dir/deploy-info.json"
           bye
           EOF

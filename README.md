@@ -247,7 +247,7 @@ APP_STORAGE=/home/paoecafe83/storage
 
 - O deploy principal acontece pelo workflow `.github/workflows/deploy-kinghost.yml`.
 - O workflow e acionado manualmente pelo `workflow_dispatch` em GitHub Actions.
-- O pipeline instala dependencias PHP sem pacotes de desenvolvimento, gera os assets Vite e envia `public/build` para os diretorios `build/`, `public/build/` e `www/build/` na KingHost usando `lftp`.
+- O pipeline instala dependencias PHP sem pacotes de desenvolvimento, gera os assets Vite e envia os arquivos para a KingHost por FTP usando `lftp`, no mesmo modelo do projeto `pec-rodrigo-kinghost`.
 - O workflow nao roda migrations nem altera o banco de dados.
 - O workflow nao envia `.env`, credenciais, `node_modules`, testes, `.git` ou arquivos privados de `storage`.
 
@@ -259,9 +259,8 @@ APP_STORAGE=/home/paoecafe83/storage
 
 ### Secrets opcionais
 
-- `KINGHOST_FTP_SERVER_DIR`: padrao `./`, raiz inicial do FTP.
+- `KINGHOST_FTP_SERVER_DIR`: raiz inicial do FTP.
 - `KINGHOST_PUBLIC_SERVER_DIR`: padrao `./`, raiz publica ativa deste host.
-- `KINGHOST_UPLOAD_APP`: padrao `false`; use `true` somente se quiser enviar tambem os arquivos do app Laravel alem da pasta publica.
 - `KINGHOST_UPLOAD_VENDOR`: padrao `false`; use `true` somente para restaurar/enviar `vendor` quando a KingHost nao tiver dependencias instaladas.
 - `KINGHOST_LARAVEL_ENV`: conteudo completo do `.env` de producao, somente se quiser que o Actions substitua o `.env` remoto.
 - `KINGHOST_FTP_PROTOCOL`: padrao `ftp`; valores aceitos: `ftp`, `ftps`, `ftps-legacy`, `sftp`.
