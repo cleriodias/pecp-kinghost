@@ -87,7 +87,6 @@ jobs:
           python3 <<'PY'
           import ftplib
           import os
-          import posixpath
           import time
           from pathlib import Path
 
@@ -142,10 +141,6 @@ jobs:
                       ftp.mkd(part)
                       ftp.cwd(part)
 
-          def leave_dir(ftp, path):
-              for _ in [part for part in path.split("/") if part and part != "."]:
-                  ftp.cwd("..")
-
           def upload_tree(remote_root):
               with connect() as ftp:
                   if ftp_root:
@@ -159,16 +154,11 @@ jobs:
                           continue
 
                       rel = file_path.relative_to(local_root).as_posix()
-                      remote_dir = posixpath.dirname(rel)
-                      remote_name = posixpath.basename(rel)
+                      remote_path = rel
 
                       def upload_file():
-                          if remote_dir:
-                              ensure_dir(ftp, remote_dir)
                           with file_path.open("rb") as handle:
-                              ftp.storbinary(f"STOR {remote_name}", handle)
-                          if remote_dir:
-                              leave_dir(ftp, remote_dir)
+                              ftp.storbinary(f"STOR {remote_path}", handle)
 
                       retry(upload_file, f"upload {remote_root}/{rel}")
 
