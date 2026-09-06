@@ -129,14 +129,16 @@ jobs:
                       ftp.mkd(part)
                       ftp.cwd(part)
 
+          def leave_dir(ftp, path):
+              for _ in [part for part in path.split("/") if part and part != "."]:
+                  ftp.cwd("..")
+
           def upload_tree(remote_root):
               with connect() as ftp:
                   if ftp_root:
                       ftp.cwd(ftp_root)
-                  start_dir = ftp.pwd()
                   ensure_dir(ftp, remote_root)
-                  destination_root = ftp.pwd()
-                  print(f"Uploading {local_root} to {destination_root}")
+                  print(f"Uploading {local_root} to {remote_root}")
 
                   for file_path in sorted(local_root.rglob("*")):
                       if not file_path.is_file():
@@ -147,15 +149,14 @@ jobs:
                       remote_name = posixpath.basename(rel)
 
                       def upload_file():
-                          ftp.cwd(destination_root)
                           if remote_dir:
                               ensure_dir(ftp, remote_dir)
                           with file_path.open("rb") as handle:
                               ftp.storbinary(f"STOR {remote_name}", handle)
+                          if remote_dir:
+                              leave_dir(ftp, remote_dir)
 
                       retry(upload_file, f"upload {remote_root}/{rel}")
-
-                  ftp.cwd(start_dir)
 
           print(f"Deploying Vite build assets to KingHost FTP root: {ftp_root or './'}")
           for remote_root in remote_roots:
