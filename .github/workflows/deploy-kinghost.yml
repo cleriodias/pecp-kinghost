@@ -51,34 +51,57 @@ jobs:
         run: |
           set -euo pipefail
 
-          upload_tree() {
-            local local_root="$1"
-            local remote_root="$2"
+          python3 <<'PY'
+          import ftplib
+          import os
+          import posixpath
+          from pathlib import Path
 
-            local_root="${local_root%/}"
-            remote_root="${remote_root%/}"
+          server = os.environ["FTP_SERVER"]
+          username = os.environ["FTP_USERNAME"]
+          password = os.environ["FTP_PASSWORD"]
 
-            while IFS= read -r -d '' file; do
-              local rel="${file#"$local_root"/}"
-              local remote_path="$rel"
+          local_root = Path("public/build")
+          remote_roots = ["build", "public/build", "www/build"]
 
-              if [ -n "$remote_root" ] && [ "$remote_root" != "." ]; then
-                remote_path="$remote_root/$rel"
-              fi
+          def ensure_dir(ftp, path):
+              original = ftp.pwd()
+              try:
+                  for part in [p for p in path.split("/") if p and p != "."]:
+                      try:
+                          ftp.cwd(part)
+                      except ftplib.error_perm:
+                          ftp.mkd(part)
+                          ftp.cwd(part)
+              finally:
+                  ftp.cwd(original)
 
-              curl --fail --silent --show-error \
-                --retry 5 \
-                --retry-delay 2 \
-                --retry-all-errors \
-                --ftp-create-dirs \
-                --user "$FTP_USERNAME:$FTP_PASSWORD" \
-                -T "$file" \
-                "ftp://$FTP_SERVER:21/./$remote_path"
-            done < <(find "$local_root" -type f -print0)
-          }
+          def upload_to_root(remote_root):
+              with ftplib.FTP(server, timeout=60) as ftp:
+                  ftp.login(username, password)
+                  ftp.set_pasv(True)
+                  ftp.cwd(remote_root)
+                  destination_root = ftp.pwd()
+                  print(f"Uploading {local_root} to {destination_root}")
 
-          upload_tree "public/build" "build"
-          upload_tree "public/build" "public/build"
-          upload_tree "public/build" "www/build"
+                  for file_path in sorted(local_root.rglob("*")):
+                      if not file_path.is_file():
+                          continue
+
+                      rel = file_path.relative_to(local_root).as_posix()
+                      remote_dir = posixpath.dirname(rel)
+                      remote_name = posixpath.basename(rel)
+
+                      ftp.cwd(destination_root)
+                      if remote_dir:
+                          ensure_dir(ftp, remote_dir)
+                          ftp.cwd(posixpath.join(destination_root, remote_dir))
+
+                      with file_path.open("rb") as handle:
+                          ftp.storbinary(f"STOR {remote_name}", handle)
+
+          for remote_root in remote_roots:
+              upload_to_root(remote_root)
+          PY
 
           echo "Deploy concluido com sucesso"
