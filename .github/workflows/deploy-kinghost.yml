@@ -43,9 +43,6 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
-      - name: Install FTP client
-        run: sudo apt-get update && sudo apt-get install -y lftp
-
       - name: Deploy build to KingHost
         env:
           FTP_SERVER: ${{ secrets.KINGHOST_FTP_SERVER }}
@@ -54,29 +51,34 @@ jobs:
         run: |
           set -euo pipefail
 
-          cat > /tmp/lftp-settings <<'EOF'
-          set cmd:fail-exit true
-          set net:timeout 30
-          set net:max-retries 5
-          set net:reconnect-interval-base 5
-          set ftp:passive-mode true
-          set ftp:ssl-allow false
-          EOF
+          upload_tree() {
+            local local_root="$1"
+            local remote_root="$2"
 
-          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" "ftp://$FTP_SERVER:21" <<EOF
-          source /tmp/lftp-settings
-          lcd public/build
+            local_root="${local_root%/}"
+            remote_root="${remote_root%/}"
 
-          cd build
-          mirror --reverse --verbose --parallel=2 ./ ./
+            while IFS= read -r -d '' file; do
+              local rel="${file#"$local_root"/}"
+              local remote_path="$rel"
 
-          cd ../public/build
-          mirror --reverse --verbose --parallel=2 ./ ./
+              if [ -n "$remote_root" ] && [ "$remote_root" != "." ]; then
+                remote_path="$remote_root/$rel"
+              fi
 
-          cd ../../www/build
-          mirror --reverse --verbose --parallel=2 ./ ./
+              curl --fail --silent --show-error \
+                --retry 5 \
+                --retry-delay 2 \
+                --retry-all-errors \
+                --ftp-create-dirs \
+                --user "$FTP_USERNAME:$FTP_PASSWORD" \
+                -T "$file" \
+                "ftp://$FTP_SERVER:21/./$remote_path"
+            done < <(find "$local_root" -type f -print0)
+          }
 
-          bye
-          EOF
+          upload_tree "public/build" "build"
+          upload_tree "public/build" "public/build"
+          upload_tree "public/build" "www/build"
 
           echo "Deploy concluido com sucesso"
