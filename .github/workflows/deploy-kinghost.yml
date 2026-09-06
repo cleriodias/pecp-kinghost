@@ -247,6 +247,8 @@ jobs:
           if [ "$public_dir" = "~" ] || [ "$public_dir" = "~/" ] || [ -z "$public_dir" ]; then
             public_dir="./"
           fi
+          server_dir_normalized="${server_dir%/}"
+          public_dir_normalized="${public_dir%/}"
           public_source="${KINGHOST_PUBLIC_DEPLOY_SOURCE:-public/}"
           verify_certificate="true"
 
@@ -322,6 +324,11 @@ jobs:
           put .env -o "$server_dir/.env"
           bye
           EOF
+          fi
+
+          if [ "$server_dir_normalized" = "." ] && [ "$public_dir_normalized" = "." ]; then
+            echo "Skipping public directory mirror because public files were already copied to the FTP root before the app mirror."
+            exit 0
           fi
 
           echo "Deploying public directory to KingHost public root: ${public_dir}"
