@@ -248,7 +248,6 @@ jobs:
           set xfer:timeout ${timeout}
           set net:reconnect-interval-base 5
           set ftp:passive-mode true
-          set ftp:ssl-protect-data true
           set ssl:verify-certificate ${verify_certificate}
           EOF
 
@@ -257,6 +256,7 @@ jobs:
             url="ftp://${KINGHOST_FTP_SERVER}:${port}"
           elif [ "$protocol" = "ftps" ] || [ "$protocol" = "ftps-legacy" ]; then
             echo "set ftp:ssl-force true" >> /tmp/lftp-settings
+            echo "set ftp:ssl-protect-data true" >> /tmp/lftp-settings
             url="ftp://${KINGHOST_FTP_SERVER}:${port}"
           else
             echo "set sftp:auto-confirm yes" >> /tmp/lftp-settings
@@ -308,16 +308,14 @@ jobs:
           EOF
           fi
 
-          echo "Deploying public directory to KingHost public root: ${public_dir}"
+          echo "Deploying Vite build assets to KingHost build directories."
 
           lftp -u "${KINGHOST_FTP_USERNAME},${KINGHOST_FTP_PASSWORD}" "$url" <<EOF
           source /tmp/lftp-settings
-          mirror --reverse --verbose --parallel=1 \
-            --exclude-glob ".env" \
-            --exclude-glob ".env.*" \
-            "$public_source" "$public_dir"
-          cls -la "$public_dir"
-          echo "Remote public deploy marker:"
-          cat "$public_dir/deploy-info.json"
+          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build build
+          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build public/build
+          mirror --reverse --verbose --parallel=1 --only-newer --no-perms public/build www/build
+          echo "Remote build manifest:"
+          cat build/manifest.json
           bye
           EOF
